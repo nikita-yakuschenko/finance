@@ -84,6 +84,7 @@ export interface CfArticleRow {
 }
 
 export interface DashboardData {
+  dataAvailable: boolean;
   sourceFile: string;
   updatedAt: string;
   balance: number;

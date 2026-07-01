@@ -328,7 +328,7 @@ function parseBddsAll(sheet: XLSX.WorkSheet): BddsMonth[] {
 }
 
 function parseBddsJune(sheet: XLSX.WorkSheet): BddsRow[] {
-  const jun = parseBddsMonth(sheet, "jun", "BJ", "BK");
+  const jun = parseBddsMonth(sheet, "jun", "AZ", "BJ", "BK");
   return jun.rows.filter((r) => [0, 1, 2].includes(r.level) || r.name.startsWith("ЧДП"));
 }
 
@@ -389,44 +389,84 @@ export function getExcelPath(): string {
   return resolveExcelPath();
 }
 
+function createEmptyDashboardData(sourceFile: string, warnings: string[]): DashboardData {
+  return {
+    dataAvailable: false,
+    sourceFile,
+    updatedAt: new Date().toISOString(),
+    balance: 0,
+    balanceLabel: "Остаток ДС",
+    previousBalance: 0,
+    changeRub: 0,
+    changePct: null,
+    creditLine: null,
+    accumulatedCf: null,
+    balancesMonthly: [],
+    organizations: [],
+    netCf: [],
+    cfWeekly: [],
+    bddsJune: [],
+    warnings,
+    snapshots: [],
+    creditLines: [],
+    accumulatedCfRows: [],
+    warehouses: [],
+    pnl: [],
+    mgmtBalance: [],
+    bddsMonths: [],
+    cfArticles: [],
+    cfWeekLabels: [],
+  };
+}
+
 export function loadDashboardData(): DashboardData {
   const sourceFile = getExcelPath();
   const warnings: string[] = [];
 
   if (!fs.existsSync(sourceFile)) {
-    throw new Error(`Файл не найден: ${sourceFile}`);
+    warnings.push(
+      `Файл данных не найден. Положите ДДС.xlsx в папку data/ или укажите переменную EXCEL_PATH. Ожидаемый путь: ${sourceFile}`,
+    );
+    return createEmptyDashboardData(sourceFile, warnings);
   }
 
-  const stat = fs.statSync(sourceFile);
-  const workbook = XLSX.read(fs.readFileSync(sourceFile), { type: "buffer", cellDates: true });
+  try {
+    const stat = fs.statSync(sourceFile);
+    const workbook = XLSX.read(fs.readFileSync(sourceFile), { type: "buffer", cellDates: true });
 
-  if (!workbook.Sheets[SNAPSHOT_SHEET]) {
-    throw new Error(`Лист «${SNAPSHOT_SHEET}» не найден в ${sourceFile}`);
+    if (!workbook.Sheets[SNAPSHOT_SHEET]) {
+      throw new Error(`Лист «${SNAPSHOT_SHEET}» не найден в ${sourceFile}`);
+    }
+
+    const snapshot = parseSnapshotSheet(workbook.Sheets[SNAPSHOT_SHEET], warnings);
+
+    const cfSheet = workbook.Sheets[CF_SHEET];
+    const cfWeekly = cfSheet ? parseCfWeekly(cfSheet) : [];
+    const cfParsed = cfSheet ? parseCfArticles(cfSheet) : { articles: [], weekLabels: [] };
+
+    const bddsSheet = workbook.Sheets[BDDS_SHEET];
+    const bddsMonths = bddsSheet ? parseBddsAll(bddsSheet) : [];
+    const bddsJune = bddsSheet ? parseBddsJune(bddsSheet) : [];
+
+    if (sourceFile.toLowerCase().includes("source.xlsx")) {
+      warnings.push("Читается source.xlsx — для полных данных используйте data/ДДС.xlsx.");
+    }
+
+    return {
+      dataAvailable: true,
+      sourceFile,
+      updatedAt: stat.mtime.toISOString(),
+      ...snapshot,
+      cfWeekly,
+      bddsJune,
+      bddsMonths,
+      cfArticles: cfParsed.articles,
+      cfWeekLabels: cfParsed.weekLabels,
+      warnings,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Ошибка чтения файла";
+    warnings.push(message);
+    return createEmptyDashboardData(sourceFile, warnings);
   }
-
-  const snapshot = parseSnapshotSheet(workbook.Sheets[SNAPSHOT_SHEET], warnings);
-
-  const cfSheet = workbook.Sheets[CF_SHEET];
-  const cfWeekly = cfSheet ? parseCfWeekly(cfSheet) : [];
-  const cfParsed = cfSheet ? parseCfArticles(cfSheet) : { articles: [], weekLabels: [] };
-
-  const bddsSheet = workbook.Sheets[BDDS_SHEET];
-  const bddsMonths = bddsSheet ? parseBddsAll(bddsSheet) : [];
-  const bddsJune = bddsSheet ? parseBddsJune(bddsSheet) : [];
-
-  if (sourceFile.toLowerCase().includes("source.xlsx")) {
-    warnings.push("Читается source.xlsx — для полных данных используйте data/ДДС.xlsx.");
-  }
-
-  return {
-    sourceFile,
-    updatedAt: stat.mtime.toISOString(),
-    ...snapshot,
-    cfWeekly,
-    bddsJune,
-    bddsMonths,
-    cfArticles: cfParsed.articles,
-    cfWeekLabels: cfParsed.weekLabels,
-    warnings,
-  };
 }

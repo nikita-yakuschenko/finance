@@ -330,20 +330,24 @@ export function DashboardSections({ data }: Props) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue={data.bddsMonths.at(-1)?.id ?? "jun"}>
-              <TabsList className="mb-4 flex-wrap h-auto">
+            {data.bddsMonths.length > 0 ? (
+              <Tabs defaultValue={data.bddsMonths.at(-1)!.id}>
+                <TabsList className="mb-4 flex-wrap h-auto">
+                  {data.bddsMonths.map((m) => (
+                    <TabsTrigger key={m.id} value={m.id}>
+                      {m.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
                 {data.bddsMonths.map((m) => (
-                  <TabsTrigger key={m.id} value={m.id}>
-                    {m.label}
-                  </TabsTrigger>
+                  <TabsContent key={m.id} value={m.id}>
+                    <BddsTable rows={m.rows} />
+                  </TabsContent>
                 ))}
-              </TabsList>
-              {data.bddsMonths.map((m) => (
-                <TabsContent key={m.id} value={m.id}>
-                  <BddsTable rows={m.rows} />
-                </TabsContent>
-              ))}
-            </Tabs>
+              </Tabs>
+            ) : (
+              <p className="text-sm text-muted-foreground">Нет данных</p>
+            )}
           </CardContent>
         </Card>
       </section>
